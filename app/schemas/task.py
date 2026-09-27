@@ -68,3 +68,5 @@ class Task(BaseModel):
     schedule: Optional[Schedule] = None
     readiness: Optional[Readiness] = None
     labels: Optional[Labels] = None
+class TaskStatusUpdate(BaseModel):
+    status: str   # e.g. "In Progress", "Completed", "Cancelled"

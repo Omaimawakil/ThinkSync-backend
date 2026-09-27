@@ -190,3 +190,83 @@ async def get_dashboard_summary(db, section_id: str | None = None):
         "blocks": blocks,
         "top_risk": top_risk
     }
+async def get_alerts(db, section_id: str | None = None, limit: int = 100):
+    task_match = {
+        "$or": [
+            {"labels.severity": "Critical"},
+            {"schedule.is_overdue": True}
+        ]
+    }
+    if section_id:
+        task_match["section_id"] = section_id
+
+    task_pipeline = [
+        {"$match": task_match},
+        {"$project": {
+            "_id": 0,
+            "section_id": 1,
+            "reference_id": "$task_id",
+            "severity": "$labels.severity",
+            "risk_score": "$labels.risk_score",
+            "is_overdue": "$schedule.is_overdue"
+        }},
+        {"$limit": limit}
+    ]
+    task_docs = await db.maintenance_tasks.aggregate(task_pipeline).to_list(length=limit)
+
+    task_alerts = []
+    for doc in task_docs:
+        if doc.get("severity") == "Critical":
+            task_alerts.append({
+                "alert_type": "Critical Task",
+                "section_id": doc["section_id"],
+                "reference_id": doc["reference_id"],
+                "severity": doc.get("severity"),
+                "risk_score": doc.get("risk_score"),
+                "message": f"Critical maintenance task {doc['reference_id']} in section {doc['section_id']}"
+            })
+        if doc.get("is_overdue"):
+            task_alerts.append({
+                "alert_type": "Overdue Task",
+                "section_id": doc["section_id"],
+                "reference_id": doc["reference_id"],
+                "severity": doc.get("severity"),
+                "risk_score": doc.get("risk_score"),
+                "message": f"Task {doc['reference_id']} in section {doc['section_id']} is overdue"
+            })
+
+    block_match = {"overrun_flag": True}
+    if section_id:
+        block_match["section_id"] = section_id
+
+    block_pipeline = [
+        {"$match": block_match},
+        {"$project": {
+            "_id": 0,
+            "section_id": 1,
+            "reference_id": "$block_id",
+            "overrun_min": 1
+        }},
+        {"$limit": limit}
+    ]
+    block_docs = await db.block_history.aggregate(block_pipeline).to_list(length=limit)
+
+    block_alerts = [
+        {
+            "alert_type": "Block Overrun",
+            "section_id": doc["section_id"],
+            "reference_id": doc["reference_id"],
+            "severity": None,
+            "risk_score": None,
+            "message": f"Block {doc['reference_id']} in section {doc['section_id']} overran by {doc.get('overrun_min', '?')} min"
+        }
+        for doc in block_docs
+    ]
+
+    return task_alerts + block_alerts
+async def update_task_status(db, task_id: str, new_status: str):
+    result = await db.maintenance_tasks.update_one(
+        {"task_id": task_id},
+        {"$set": {"labels.task_status": new_status}}
+    )
+    return result.matched_count, result.modified_count
