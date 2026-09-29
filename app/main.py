@@ -4,10 +4,16 @@ from app.routes import dashboard
 from app.routes import alerts
 from app.routes import auth
 from app.routes.reports import router as reports_router
+from app.logging_config import setup_logging, log_requests
+from app.exceptions import register_exception_handlers
+
+setup_logging()
 
 
 app = FastAPI(title="ThinkSync Backend")
 
+app.middleware("http")(log_requests)
+register_exception_handlers(app)
 app.include_router(reports_router, prefix="/api")
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
