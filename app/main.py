@@ -3,9 +3,12 @@ from app.routes import sections, tasks, resources, blocks, traffic
 from app.routes import dashboard
 from app.routes import alerts
 from app.routes import auth
+from app.routes.reports import router as reports_router
+
 
 app = FastAPI(title="ThinkSync Backend")
 
+app.include_router(reports_router, prefix="/api")
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"])
 app.include_router(dashboard.router, prefix="/api", tags=["dashboard"])
